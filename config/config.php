@@ -14,15 +14,16 @@ use Hyperf\Contract\StdoutLoggerInterface;
 use Psr\Log\LogLevel;
 
 return [
-    'app_name' => env('APP_NAME', 'skeleton'),
+    'app_name' => env('APP_NAME', 'hyperf-app'),
+    'app_url' => env('APP_URL', 'http://127.0.0.1'),
     StdoutLoggerInterface::class => [
         'log_level' => [
             LogLevel::ALERT,
             LogLevel::CRITICAL,
-            LogLevel::DEBUG,
+//            LogLevel::DEBUG,
             LogLevel::EMERGENCY,
             LogLevel::ERROR,
-            LogLevel::INFO,
+//            LogLevel::INFO,
             LogLevel::NOTICE,
             LogLevel::WARNING,
         ],

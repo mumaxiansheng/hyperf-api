@@ -12,7 +12,9 @@ declare(strict_types=1);
 
 namespace App\Exception\Handler;
 
-use Hyperf\Contract\StdoutLoggerInterface;
+use App\Librarys\Log;
+use App\Librarys\Redis;
+use App\Librarys\WeChatRobot;
 use Hyperf\ExceptionHandler\ExceptionHandler;
 use Hyperf\HttpMessage\Stream\SwooleStream;
 use Psr\Http\Message\ResponseInterface;
@@ -21,20 +23,40 @@ use Throwable;
 class AppExceptionHandler extends ExceptionHandler
 {
     /**
-     * @var StdoutLoggerInterface
+     * 处理异常
+     * @param Throwable $throwable
+     * @param ResponseInterface $response
+     * @return ResponseInterface
+     * @throws \Exception
      */
-    protected $logger;
-
-    public function __construct(StdoutLoggerInterface $logger)
-    {
-        $this->logger = $logger;
-    }
-
     public function handle(Throwable $throwable, ResponseInterface $response)
     {
-        $this->logger->error(sprintf('%s[%s] in %s', $throwable->getMessage(), $throwable->getLine(), $throwable->getFile()));
-        $this->logger->error($throwable->getTraceAsString());
-        return $response->withHeader("Server", "Hyperf")->withStatus(500)->withBody(new SwooleStream('Internal Server Error.'));
+        $uuid = createUuid();
+        $code = $throwable->getCode();
+        $errMsg = $throwable->getMessage();
+        $errLine = $throwable->getLine();
+        $errFile = $throwable->getFile();
+        $traceMsg = $throwable->getTraceAsString();
+
+        //记录日志
+        Log::recordLog('system_' . $uuid, $errMsg . $errLine . $errFile, [], LOG_ERR);
+        Log::recordLog('system_' . $uuid, $traceMsg, [], LOG_INFO);
+
+        //异常数据保存redis
+        Redis::getExceptionRedisConnection()->setex('system_error_' . $uuid, 43200, $traceMsg);
+
+        //发送报警
+        $link = config('app_url') . "/error/" . $uuid;
+        $robotContent = "# <font color=\"warning\">错误报警</font>\n> 
+            文件路劲：{$errFile}\n> 
+            文件行数：{$errLine}\n> 
+            错误内容：{$errMsg}\n> 
+            [错误详情]({$link})";
+        WeChatRobot::getInstance()->send($robotContent);
+
+        $responseData['code'] = $code;
+        $responseData['message'] = $errMsg;
+        return $response->withStatus(200)->withBody(new SwooleStream(chJsonEncode($responseData)));
     }
 
     public function isValid(Throwable $throwable): bool
